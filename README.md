@@ -23,3 +23,11 @@ Applied Cryptography and Network Security Fall 2019 Project
  To reset the Group Server, delete UserList.bin.
  
  Note that this implementation supports server side directories.
+
+## Compile
+Once inside src/ folder,
+
+COMPILE: javac *.java
+
+COMPILE bouncycastle : javac -cp :./bcprov-jdk15on-163.jar [FILE].java
+run: java -cp :./bcprov-jdk15on-163.jar [FILE]
