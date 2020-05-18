@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>CS 1653 Project P3 Writeup</title>
+    <style>
+        /* BEGIN CHANGES HERE */
+
+        /* In this section, you may add CSS styling if desired.
+         * Be sure your writeup still prints legibly. */
+        header {
+            text-align: center;
+        }
+
+        body {
+            font-family: 'Futura';
+            font-size: 16px;
+            margin: 2vh 10vw;
+            line-height: 200%;
+        }
+
+        /* END CHANGES HERE */
+    </style>
+<body>
+<header>
+    <h1>CS 1653 Project P3 Writeup</h1>
+    <h2>
+        <!-- BEGIN CHANGES HERE -->
+
+        Sudheendra Kusume <br/>
+        Leah Mooney <br/>
+        Jacob McAfoos <br/>
+
+        <!-- END CHANGES HERE -->
+    </h2>
+</header>
+<section id="overview">
+    <h2>Overview</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p>Our current implementation of the Secure File Server has many security flaws. We use different algorithms and
+        protocols to ensure that threats 1-4 do not become
+        vulnerabilities that an attacker can abuse to cause the System to malfunction or not behave as designed.
+    </p>
+    <p>Algorithms: <br/>
+	<ul>
+        <li>Advanced Encryption Standard (AES) : A 256 bit AES encryption is used whenever shared key is established between
+        either the Group server and Client or the File Server and Client for further communication. Using the Counter
+        Mode we can easily encrypt and decrypt large files. <br/>
+        <li>SHA 256(using SHA 2): We use this algorithm to hash any message during the communication between Clients and either the Group
+        Server or File Server as needed. We use hashing for user password validation and the integrity of the Token.
+		</ul>
+    </p>
+    <p>
+        Protocols: <br/>
+        <ul><li>Secure Remote Password (SRP): Used to mutually authenticate both the Group Server and Client to create a session
+        key as well as create a secure channel for the Group Server to send the Token of the user.
+        <li>Diffie-Hellman Key Exchange: Used to exchange symmetric keys for faster encryption and decryption.
+        Diffie-Hellman g: 2
+        Diffie-Hellman p: 2^2048 - 2^1984 - 1 + 2^64 * { [2^1918 pi] + 124476 }
+        Diffie-Hellman p (in HEX): FFFFFFFF FFFFFFFF C90FDAA2 2168C234 C4C6628B 80DC1CD1 29024E08
+        8A67CC74 020BBEA6 3B139B22 514A0879 8E3404DD EF9519B3 CD3A431B 302B0A6D F25F1437 4FE1356D
+        6D51C245 E485B576 625E7EC6 F44C42E9 A637ED6B 0BFF5CB6 F406B7ED EE386BFB 5A899FA5 AE9F2411
+        7C4B1FE6 49286651 ECE45B3D C2007CB8 A163BF05 98DA4836 1C55D39A 69163FA8 FD24CF5F 83655D23
+        DCA3AD96 1C62F356 208552BB 9ED52907 7096966D 670C354E 4ABC9804 F1746C08 CA18217C 32905E46
+        2E36CE3B E39E772C 180E8603 9B2783A2 EC07A28F B5C55DF0 6F4C52C9 DE2BCBF6 95581718 3995497C
+        EA956AE5 15D22618 98FA0510 15728E5A 8AACAA68 FFFFFFFF FFFFFFFF
+		</ul>
+    </p>
+
+    <!-- END CHANGES HERE -->
+</section>
+<section id="threat1">
+    <h2>Threat T1: Unauthorized Token Issuance</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p>Threat 1 talks about how a Token is given to a unauthorized user. Our current implementation of the Secure File
+        Server allows any user to login as any other user. For example if Eve wants to impersonate Bob and get his Token
+        all she has to do is enter Bob's username which is BOB. This threat lets unathorized users from gaining access
+        to other users credentials and rights. </p>
+
+    <!-- PBKDF2 for reducing the key size?? -->
+
+    <p>We choose to add a password for each user that would help authenticate them. Using SRP we can achieve a pretty
+        good password authentication for each user. Since our assumption that the Group Server is secure the following
+        communication between the Client and the Server is secure. We use a hardcoded generator and p (large prime
+        number) for the key exchange in SRP. The users can themselves create an account with their username and password. To
+        generate a smaller key from the big DF session key, we hash the key using SHA256 to get a 256 bit AES key. The
+        final session key generated is used for further communication between the Client and the Server.</p>
+
+    <p>No other party can figure out the symmetric key due to the computationally hard problem of discrete
+        logarithms.</p>
+
+    <img src="SRP.png" alt="SRP">
+    <!-- END CHANGES HERE -->
+</section>
+<section id="threat2">
+    <h2>Threat T2: Token Modification/Forgery</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p>Threat 2 talks about how a user can try to modify their own legitimate Ticket to gain more permissions in the
+        system or copy another user's token. The current implementation of the application allows users to modify the
+        content of the Token that the Group Server assigns them to gain more privileges. </p>
+
+    <p>To mitigate this threat we use hashes of the Token to verify if the user token is legitimate.
+        Since only the Group Server can issue the Token, it sends the Token with the signed Hash of the
+        Token encrypted using the Session Key generated in T1. The Token object is going to be converted into a
+        string using a Java library object to binary function, which will convert it to a binary string
+        before encrypted. The Token's properties, like the users groups and privileges, will
+        be separated by colons in the message before decryption. After decryption these will be parsed
+        back out and placed back into a token object for use. The Colons themselves will be
+        banned characters from Group Names and Usernames to avoid parsing issues upon decryption. The Server stores the
+        Tokens of each user along with its hash value. Every time the user makes a change in the system that causes
+        changes in the Token (e.g creating a new group, deleting a group etc.), the Group Server first
+        checks if the requesting user's Token hash matches with that in its own database and then only
+        is the Token and the hash updated by the Group Server. If a user maliciously tries to change their
+        Token, they wouldn't be able to perform anymore tasks until they request their Token again or
+        revert back the changes made maliciously.</p>
+
+    <p>Since the hash function we use (SHA256) is pre-image resistant, second pre-image resistant
+        and collision resistant we can say that no two different Tokens would have the same hash
+        and its impossible to get the original input to the hash function by just looking at the hash.</p>
+    <!-- END CHANGES HERE -->
+    <img src="threat2.png" alt="T2 Diagram">
+</section>
+<section id="threat3">
+    <h2>Threat T3: Unauthorized File Servers</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p>For users to be able to fully trust a file server, they need to be able to
+        trust they they have connected to the server that they had intended. This needs to be
+        addressed because if it is not, then an adversary could pose as a fileserver,
+        and send the user malicious files or get information from them by running
+        unknown, untrusted server code.</p>
+
+    <p>The user will begin a Diffie-Hellman exchange with the user's first message to the file server encrypted with the file server's
+    public RSA key. The user has this key by receiving it offline by either the admin or the owner of the file server. The file server
+    will respond with a normal Diffie-Hellman response. Then both servers generate the symmetric Key from the exchange.</p>
+
+    <p>The purpose of this process is twofold; one, both the user and the fileserver should set up a symmetric key so that they may encrypt
+    decrypt files and information more easily. Two, the user needs to verify that the file server they connect to is the one that they had
+    intended. By encrypting the first message in the Diffie-Hellman exchange, only the intended recipient would be able to generate the
+    correct symmetric key from the Diffie-Hellman exchange, because they would need the correct private key to decrypt it.</p>
+
+    <img src="File Server Verification.png" alt="T3 Diagram">
+
+    <!-- END CHANGES HERE -->
+</section>
+<section id="threat4">
+    <h2>Threat T4: Information Leakage via Passive Monitoring</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p>This threat focuses on the attacker listening in on the communications between Client and Servers and how the
+        attacker can gather useful data from this. In our current implementation all data that is sent between Clients
+        and Servers is in plaintext which would allow a passive monitoring attacker to gain knowledge to steal user
+        credentials, tokens etc. This threat, if unchecked could allow anyone listening on the communication to
+        impersonate users, gain useful information of existing groups, members in the groups etc.</p>
+
+    <p>To overcome this threat we use the session keys obtained in T1 and T3 to encrypt all useful data that the
+        attacker could use against the application. To do so we use AES 256 bit encryption. Diffie-Hellman exchanges
+        prevent passive listeners from gaining the exchanged symmetric keys.</p>
+
+    <p>To an attacker listening in, all the data would appear to be gibberish. Compromised previous session keys are of
+        no use as a new key is generated every session with the Servers.</p>
+    <!-- END CHANGES HERE -->
+</section>
+<section id="discussion">
+    <h2>Discussion</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p>There were many other approaches we thought of such as RSA signatures, using a self-made CA or designing our own
+        algorithms for key exchanges but using previously tested algorithms and protocols is always the best practice as
+        they have been tested countless times by many researchers. </p>
+
+    <h4>Extra credit</h4>
+
+    <!-- END CHANGES HERE -->
+</section>
+</body>
+</html>

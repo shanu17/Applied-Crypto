@@ -1,0 +1,11 @@
+Notes: Phase 4 writeup meeting
+
+Use MAC instead of private/public key for T5 Modification, second symmetric key for the MAC
+
+T5 Reorder: Time stamps help but also number the envelopes (See TLS diagram)
+
+T6: Key change needed: Hash the sym key 100 times, when user leaves the group, change key, key versions. Don't worry about lamport
+  way. keep it simple. How to reencrypt all files when key is. Look up lazy revocation: reencrypt anything that has changed. Some metadata
+  needed.
+
+T7: IP and port is not a unique identifier, use public key (Already unique and we already have it)

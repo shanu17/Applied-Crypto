@@ -1,0 +1,6 @@
+Once inside src/ folder,
+
+COMPILE: javac *.java
+
+COMPILE bouncycastle : javac -cp :./bcprov-jdk15on-163.jar [FILE].java
+run: java -cp :./bcprov-jdk15on-163.jar [FILE]

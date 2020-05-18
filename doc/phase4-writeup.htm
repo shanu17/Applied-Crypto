@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>CS 1653 Project P4 Writeup</title>
+    <style>
+        /* BEGIN CHANGES HERE */
+
+        /* In this section, you may add CSS styling if desired.
+         * Be sure your writeup still prints legibly. */
+        header {
+            text-align: center;
+        }
+
+        body {
+            font-family: 'Futura';
+            font-size: 16px;
+            margin: 2vh 10vw;
+            line-height: 200%;
+        }
+        .quote {
+          font-weight: bold;
+          font-style: italic;
+        }
+
+        /* END CHANGES HERE */
+    </style>
+<body>
+<header>
+    <h1>CS 1653 Project P4 Writeup</h1>
+    <h2>
+        <!-- BEGIN CHANGES HERE -->
+
+        Sudheendra Kusume <br/>
+        Leah Mooney <br/>
+        Jacob McAfoos <br/>
+
+        <!-- END CHANGES HERE -->
+    </h2>
+</header>
+<section id="overview">
+    <h2>Overview</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p>Our current implementation of the Secure File Server has many security flaws. We use different algorithms and
+        protocols to ensure that threats 5-7 do not become
+        vulnerabilities that an attacker can abuse to cause the System to malfunction or not behave as designed.
+    </p>
+    <p>Algorithms: <br/>
+	<ul>
+        <li>Advanced Encryption Standard (AES) : A 256 bit AES encryption is used whenever shared key is established between
+        either the Group server and Client or the File Server and Client for further communication. Using the Counter
+        Mode we can easily encrypt and decrypt large files. <br/>
+        <li>SHA 256(using SHA 2): We use this algorithm to hash any message during the communication between Clients and either the Group
+        Server or File Server as needed. We use hashing for user password validation and the integrity of the Token.
+		</ul>
+    </p>
+    <p>
+        Protocols: <br/>
+        <ul><li>Secure Remote Password (SRP): Used to mutually authenticate both the Group Server and Client to create a session
+        key as well as create a secure channel for the Group Server to send the Token of the user.
+        <li>Diffie-Hellman Key Exchange: Used to exchange symmetric keys for faster encryption and decryption.
+        Diffie-Hellman g: 2
+        Diffie-Hellman p: 2^2048 - 2^1984 - 1 + 2^64 * { [2^1918 pi] + 124476 }
+        Diffie-Hellman p (in HEX): FFFFFFFF FFFFFFFF C90FDAA2 2168C234 C4C6628B 80DC1CD1 29024E08
+        8A67CC74 020BBEA6 3B139B22 514A0879 8E3404DD EF9519B3 CD3A431B 302B0A6D F25F1437 4FE1356D
+        6D51C245 E485B576 625E7EC6 F44C42E9 A637ED6B 0BFF5CB6 F406B7ED EE386BFB 5A899FA5 AE9F2411
+        7C4B1FE6 49286651 ECE45B3D C2007CB8 A163BF05 98DA4836 1C55D39A 69163FA8 FD24CF5F 83655D23
+        DCA3AD96 1C62F356 208552BB 9ED52907 7096966D 670C354E 4ABC9804 F1746C08 CA18217C 32905E46
+        2E36CE3B E39E772C 180E8603 9B2783A2 EC07A28F B5C55DF0 6F4C52C9 DE2BCBF6 95581718 3995497C
+        EA956AE5 15D22618 98FA0510 15728E5A 8AACAA68 FFFFFFFF FFFFFFFF
+		</ul>
+    </p>
+
+    <!-- END CHANGES HERE -->
+</section>
+<section id="threat5">
+    <h2>Threat T5: </h2>
+    <p>
+      Message reorder, replay and modification can each be handled with simple means.
+      <ul>
+        <li>
+          Reorder: All messages sent by the user to the group server will contain a incrementing number.  This number will be
+          included as a parameter within the users Token Object, and therefore not require any further encryption beyond what
+          already exisits, as the object file as a whole is converted to a byte array using java.io.ByteArrayInputStream &
+          java.io.ByteArrayOutputStream libraries.
+          Each time the token is read the number will be incremented. This includes each time it is converted to an array and send between the file and group threads.
+          Based on the previous message recieved by the group server checking this number will: 1) add to the verification step of the Token Auth by
+          verifiyfing the current message follows the previous sequentailly and therefore is sent by the same user as the last
+          as well (A red flag can be: Alice's last message was number 6, and this one from 'Alice' is message 34 so this is obviously wrong),
+          and 2) prevent valid messages from being read out of order, as any message who's number
+          is anything but one number greater than the last number will be rejected.
+          <br/>
+          The Group thread will hold this previous number within the group permissions.
+          Messages recieved out of order will not be stored to wait for a correct number, but update from
+          the highest most recent number given, and consider all messages previous invalid.
+        </li>
+        <li>
+          Replay:  All messages sent between the client and server will now include timestamps concatted to the ends.
+          Time stamps will be generated using java's get time, and will be encrypted along with the rest of the message.
+          Messages are only valid if the timestamps are within 2 minutes of each other. This midigates all attempts at message
+          archieved for replay attacks after those 2 minutes have ended.
+          <br/>
+          Replay prevention can also benefit from the envelope number implementation, as repeated numbers are not 1 number greater
+          than the previous updated number.  If anything they can be the same as the last valid number, with will still not be considered
+          valid for the same reason.
+        </li>
+        <li>
+          Modification: Message modification prevention has already been implemented in the server and user client messages:
+          <br/>
+            <p class=".quote">
+          "Tokens are encrypted using the Session Key generated in T1. The Token object is going to be converted into a
+          string using a Java library object to binary function (java.io.ByteArrayInputStream), which will convert it to
+          a binary string to be easily encrypted as a string instead of an object. The Token's properties,
+          like the users groups and privileges are saved as parameters within the token object, will
+          be concatted together with string literal colons (";") before decryption by the file server. After decryption these will be parsed
+          back out and placed back into a token object for use. The Colons themselves will be
+          banned characters from Group Names and Usernames to avoid parsing issues upon decryption. The Server stores the
+          Tokens of each user along with its hash value."
+          </p>
+          Along each message concatination of the token objects, will now be the hash (done with SHA2-256) of the token bits signed with a MAC
+          sent as the second object in our evelope bus.
+          When recieved by the file Server, the first entry of the envelope, the encrypted token bytes, will be decrypted using the group and file servers public key pairs.
+          The hash of the token bits following is decrypted using the MAC
+          MAC's will be a signed static string of bits keyed with the user's public key.
+
+          Until the message and hash is decrypted and
+          confirmed to match the messages are not valid.  Therefore modification of anykind will be noticed immediatly.
+        </li>
+      </ul>
+    </p>
+
+    <!-- PBKDF2 for reducing the key size?? -->
+
+    <p> </p>
+
+    <p> </p>
+
+    <!-- END CHANGES HERE -->
+</section>
+<section id="threat6">
+    <h2>Threat T6: File Leakage</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p> As File Servers are untrustworthy, we have to take into account the lieklyhood that
+        they will leak files. As such. It is our job to ensure that
+        only members of the appropriate group will be able to read and write to those files.
+        Those files need to be stored on the file server in such a ways
+        so that they cannot be read when leaked. If this is not addressed, an active
+        attacker could pose as a member of a different group and potentially
+        read any and all files that are supposed to be contained to that group.</p>
+
+    <p> Our proposed mechanism for solving this is to generate an AES key upon
+        group creation. They will then share this secret with the group server,
+        who we know is trustworthy, and the group server will store that key
+        associated with the new group. When a user signs into the group server, the
+        initial exchange will also give them all group to group AES keys in a
+        Map for which they have permisison. Whenever they send files to the file server,
+        they will encrypt it with the proper key for thier group. Additionally,
+        when any user leaves the group, the key will be hashed updating the key.
+        Metadata kept with the file will show what generation key to use to decrypt
+        it. All legacy keys will be stored on the group server and be sent to the
+        user upon initial key exchange.</p>
+
+    <p> This proposed mechanism will solve the threat because only the file server will no longer be storing the plaintexts of the files. Instead, every file
+        will be encrypted and readable by only the users that have access to the symmetric key for the proper group. Any attackers who convince the file server
+        to leak a file will gain no information from it. Additionally, because the groupserver will  be responsible for maintaining those keys, and we know that
+        the group server is trusted, the group server can actively track which users are a part of which groups. The server will only give the keys to a user
+        for which they have proper permissions to use.</p>
+
+    <img src="T3_Solution.png" alt="T3_Solution">
+    <!-- END CHANGES HERE -->
+</section>
+<section id="threat7">
+    <h2>Threat T7: Token Theft</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p> This threat deals with file servers stealing tokens and attempting to pass them on to another user.
+        If a rogue file server were to capture and distribute a user's
+        token, attackers in control of this token could utilize it to perform malicious operations. In a given
+        user session, the user can only connect to a single file server,
+        where upon startup the server's address is specified (or defaults to localhost if none is entered).
+        In order to connect to a different file server, the user would have to start a new session and specify
+        the new server he/she wishes to connect to--it is not possible to change this during a session.</p>
+
+    <p> Tokens include
+        the following information in our Phase 3 implementation: issuer, subject, group list,
+        a hash of the token digitally signed with the group server's private key, and this time for phase 4 most
+        importantly, a timestamp and a unique identifier. This timestamp achieves freshness for the token, making it
+        impossible to utilize the token after the window of network tolerance expires.
+        Also binding the token itself to the selected server will make it non-transferable to another session or server.
+        We will do
+        this by adding a field to the token itself--the public key of the server being used.
+        token = timestamp || public key || issuer || subject || groups </p>
+        <br/>
+        For tokens that might not have been in use recently, and therefore might time out of the timestamp window even when valid, there is a backup.
+        Everytime a token is used and read by the file thread it is saved in the varible "verifyToken".  The next
+        time the token is used, it is compared to this back-up.  If the back-up and the current token do not match,
+        the token will be rejected.  Because one's token address which can never change, it can be used to used to verify
+        that the token indeeds belongs to the original user it was assigned. This also means that once a user has become inactive,
+        the verifyToken back-up is also deleted to prevent further usage.
+        <br/>
+
+    <p> Overall, this defense mechanism adequately addresses the threat of token theft.
+        By including both a timestamp and the intended token destination in the token itself,
+        the stolen token cannot be feasibly distributed or used to allow attackers to gain
+        permissions on both the group server or other file servers. This mechanism coupled with the
+        solution for T2 ensures that malicious file servers do not wreak havoc in the system.</p>
+
+    <!-- END CHANGES HERE -->
+</section>
+<section id="discussion">
+    <h2>Discussion</h2>
+    <!-- BEGIN CHANGES HERE -->
+
+    <p> </p>
+
+    <h4>Extra credit</h4>
+
+    <!-- END CHANGES HERE -->
+</section>
+</body>
+</html>
